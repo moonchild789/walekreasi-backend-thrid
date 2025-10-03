@@ -32,6 +32,7 @@ const PORT = process.env.PORT || 5000;
 // ✅ CORS Setup
 const allowedOrigins = [
   "http://localhost:5173",
+  "http://localhost:4173",
   "https://walekreasi.vercel.app",
 ];
 
