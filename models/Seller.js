@@ -6,6 +6,8 @@ const SellerSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
+
+  // Data Pribadi
   sellerName: {
     type: String,
     required: true,
@@ -17,15 +19,23 @@ const SellerSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-
-  // Data Identitas dan Domisili
-  nik: {
+  password: {
     type: String,
-    required: false,
+    required: true,
   },
+
+  // Domisili
   domicileAddress: {
     type: String,
     required: true,
+  },
+  cityOrRegency: {
+    type: String,
+    required: true, 
+  },
+  province: {
+    type: String,
+    default: "Sulawesi Utara",
   },
 
   // Data Usaha
@@ -56,15 +66,6 @@ const SellerSchema = new mongoose.Schema({
   bankAccountNumber: {
     type: String,
   },
-  eWalletsAccountOwner: {
-    type: String,
-  },
-  eWallet: {
-    type: String,
-  },
-  eWalletAccountNumber: {
-    type: String,
-  },
 
   // Persetujuan
   agreedToTerms: {
@@ -73,7 +74,13 @@ const SellerSchema = new mongoose.Schema({
     default: false,
   },
 
-  // Tanggal Daftar
+  // Status Seller
+  isActive: {
+    type: Boolean,
+    default: true,
+  },
+
+  // Tanggal Pendaftaran
   createdAt: {
     type: Date,
     default: Date.now,
