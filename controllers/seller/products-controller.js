@@ -12,7 +12,10 @@ const handleImageUpload = async (req, res) => {
     res.json({ success: true, result });
   } catch (error) {
     console.error("Image upload error:", error);
-    res.status(500).json({ success: false, message: "Terjadi kesalahan saat upload gambar" });
+    res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan saat upload gambar",
+    });
   }
 };
 
@@ -27,12 +30,15 @@ const addProduct = async (req, res) => {
     salePrice,
     totalStock,
     averageReview = 0,
+    shippingCost = 0, // 🆕 ongkir per produk (opsional)
   } = req.body;
 
   try {
     const seller = await Seller.findOne({ user: req.user.id });
     if (!seller) {
-      return res.status(404).json({ success: false, message: "Toko tidak ditemukan." });
+      return res
+        .status(404)
+        .json({ success: false, message: "Toko tidak ditemukan." });
     }
 
     const product = new Product({
@@ -44,6 +50,7 @@ const addProduct = async (req, res) => {
       salePrice,
       totalStock,
       averageReview,
+      shippingCost, // 🆕 simpan ongkos kirim
       sellerId: seller._id,
     });
 
@@ -55,7 +62,9 @@ const addProduct = async (req, res) => {
     });
   } catch (error) {
     console.error("Gagal menambahkan produk:", error);
-    res.status(500).json({ success: false, message: "Gagal menambahkan produk" });
+    res
+      .status(500)
+      .json({ success: false, message: "Gagal menambahkan produk" });
   }
 };
 
@@ -64,14 +73,19 @@ const fetchAllProducts = async (req, res) => {
   try {
     const seller = await Seller.findOne({ user: req.user.id });
     if (!seller) {
-      return res.status(404).json({ success: false, message: "Toko tidak ditemukan." });
+      return res
+        .status(404)
+        .json({ success: false, message: "Toko tidak ditemukan." });
     }
 
     const listOfProducts = await Product.find({ sellerId: seller._id });
     res.status(200).json({ success: true, data: listOfProducts });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Terjadi kesalahan saat mengambil produk" });
+    res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan saat mengambil produk",
+    });
   }
 };
 
@@ -83,22 +97,27 @@ const editProduct = async (req, res) => {
     title,
     description,
     category,
-    brand,
     price,
     salePrice,
     totalStock,
     averageReview,
+    shippingCost, // 🆕 ikut disertakan untuk update
   } = req.body;
 
   try {
     const seller = await Seller.findOne({ user: req.user.id });
     if (!seller) {
-      return res.status(404).json({ success: false, message: "Toko tidak ditemukan." });
+      return res
+        .status(404)
+        .json({ success: false, message: "Toko tidak ditemukan." });
     }
 
     const findProduct = await Product.findOne({ _id: id, sellerId: seller._id });
     if (!findProduct) {
-      return res.status(404).json({ success: false, message: "Produk tidak ditemukan atau tidak dimiliki oleh Anda." });
+      return res.status(404).json({
+        success: false,
+        message: "Produk tidak ditemukan atau tidak dimiliki oleh Anda.",
+      });
     }
 
     findProduct.image = image ?? findProduct.image;
@@ -106,15 +125,21 @@ const editProduct = async (req, res) => {
     findProduct.description = description ?? findProduct.description;
     findProduct.category = category ?? findProduct.category;
     findProduct.price = price === "" ? 0 : price ?? findProduct.price;
-    findProduct.salePrice = salePrice === "" ? 0 : salePrice ?? findProduct.salePrice;
+    findProduct.salePrice =
+      salePrice === "" ? 0 : salePrice ?? findProduct.salePrice;
     findProduct.totalStock = totalStock ?? findProduct.totalStock;
     findProduct.averageReview = averageReview ?? findProduct.averageReview;
+    findProduct.shippingCost =
+      shippingCost === "" ? 0 : shippingCost ?? findProduct.shippingCost; // 🆕
 
     await findProduct.save();
     res.status(200).json({ success: true, data: findProduct });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Terjadi kesalahan saat mengedit produk" });
+    res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan saat mengedit produk",
+    });
   }
 };
 
@@ -125,18 +150,28 @@ const deleteProduct = async (req, res) => {
   try {
     const seller = await Seller.findOne({ user: req.user.id });
     if (!seller) {
-      return res.status(404).json({ success: false, message: "Toko tidak ditemukan." });
+      return res
+        .status(404)
+        .json({ success: false, message: "Toko tidak ditemukan." });
     }
 
-    const product = await Product.findOneAndDelete({ _id: id, sellerId: seller._id });
+    const product = await Product.findOneAndDelete({
+      _id: id,
+      sellerId: seller._id,
+    });
     if (!product) {
-      return res.status(404).json({ success: false, message: "Produk tidak ditemukan." });
+      return res
+        .status(404)
+        .json({ success: false, message: "Produk tidak ditemukan." });
     }
 
     res.status(200).json({ success: true, message: "Produk berhasil dihapus" });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Terjadi kesalahan saat menghapus produk" });
+    res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan saat menghapus produk",
+    });
   }
 };
 

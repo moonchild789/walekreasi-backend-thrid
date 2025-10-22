@@ -19,6 +19,10 @@ const OrderSchema = new mongoose.Schema({
       image: String,
       price: String,
       quantity: Number,
+      shippingCost: {
+        type: Number,
+        default: 0, // Ongkos kirim per produk
+      },
       isReviewed: {
         type: Boolean,
         default: false,
@@ -31,7 +35,7 @@ const OrderSchema = new mongoose.Schema({
       sellerPhone: String,
     },
   ],
-  
+
   addressInfo: {
     addressId: String,
     receiverName: String,
@@ -41,10 +45,27 @@ const OrderSchema = new mongoose.Schema({
     phone: String,
     notes: String,
   },
-  orderStatus: String,
+
+  orderStatus: {
+    type: String,
+    default: "Menunggu Konfirmasi",
+  },
   paymentMethod: String,
-  paymentStatus: String,
-  totalAmount: Number,
+  paymentStatus: {
+    type: String,
+    default: "pending",
+  },
+
+  totalAmount: Number, // total harga produk saja
+  shippingTotal: {
+    type: Number,
+    default: 0, // total ongkir dari semua produk
+  },
+  grandTotal: {
+    type: Number,
+    default: 0, // totalAmount + shippingTotal
+  },
+
   orderDate: Date,
   orderUpdateDate: Date,
   paymentId: String,

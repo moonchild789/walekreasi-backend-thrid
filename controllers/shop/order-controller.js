@@ -5,9 +5,11 @@ const Cart = require("../../models/Cart");
 const Product = require("../../models/Product");
 const User = require("../../models/User");
 const Seller = require("../../models/Seller");
-const { sendOrderNotificationToSeller } = require("../common/notification-controller"); 
+const { sendOrderNotificationToSeller } = require("../common/notification-controller");
 
-// Membuat pesanan dan token Midtrans Snap
+// =========================
+// CREATE ORDER
+// =========================
 const createOrder = async (req, res) => {
   try {
     const { userId, cartId, cartItems, addressInfo } = req.body;
@@ -15,6 +17,7 @@ const createOrder = async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ success: false, message: "User tidak ditemukan." });
 
+    // Ambil data produk & seller
     const updatedCartItems = await Promise.all(
       cartItems.map(async (item) => {
         const product = await Product.findById(item.productId);
@@ -31,14 +34,21 @@ const createOrder = async (req, res) => {
           image: product?.image || "",
           price: product?.salePrice > 0 ? product.salePrice : product.price,
           quantity: item.quantity,
+          shippingCost: item.shippingCost || 0,
         };
       })
     );
 
+    // Hitung total harga dan total ongkir
     const totalAmount = updatedCartItems.reduce(
       (sum, item) => sum + item.price * item.quantity,
       0
     );
+    const shippingTotal = updatedCartItems.reduce(
+      (sum, item) => sum + (item.shippingCost || 0),
+      0
+    );
+    const grandTotal = totalAmount + shippingTotal;
 
     const sellerId = updatedCartItems[0]?.sellerId;
 
@@ -61,6 +71,8 @@ const createOrder = async (req, res) => {
       orderStatus: "pending",
       paymentStatus: "Belum Dibayar",
       totalAmount,
+      shippingTotal,
+      grandTotal,
       orderDate: new Date(),
     });
 
@@ -73,17 +85,33 @@ const createOrder = async (req, res) => {
       console.error("❌ Gagal mengirim notifikasi ke seller:", notifyErr.message);
     }
 
+    // ========================
+    // MIDTRANS TRANSACTION
+    // ========================
     const transaction = await snap.createTransaction({
       transaction_details: {
         order_id: newOrder._id.toString(),
-        gross_amount: totalAmount,
+        gross_amount: grandTotal, // ✅ total produk + ongkir
       },
-      item_details: updatedCartItems.map((item) => ({
-        id: item.productId,
-        price: item.price,
-        quantity: item.quantity,
-        name: `${item.title} | Toko: ${item.storeName}`.slice(0, 50),
-      })),
+      item_details: [
+        ...updatedCartItems.map((item) => ({
+          id: item.productId,
+          price: item.price,
+          quantity: item.quantity,
+          name: `${item.title} | ${item.storeName}`.slice(0, 50),
+        })),
+        // ✅ Tambahkan item ongkir sebagai item terpisah di Midtrans
+        ...(shippingTotal > 0
+          ? [
+              {
+                id: "shipping",
+                price: shippingTotal,
+                quantity: 1,
+                name: "Ongkos Kirim",
+              },
+            ]
+          : []),
+      ],
       customer_details: {
         first_name: user.userName,
         phone: user.phoneNumber,
@@ -107,7 +135,9 @@ const createOrder = async (req, res) => {
   }
 };
 
-// ... fungsi lain tetap sama (tidak diubah)
+// =========================
+// CAPTURE PAYMENT
+// =========================
 const capturePayment = async (req, res) => {
   try {
     const { orderId, transactionStatus } = req.body;
@@ -122,9 +152,10 @@ const capturePayment = async (req, res) => {
 
     if (["settlement", "capture"].includes(transactionStatus)) {
       order.paymentStatus = "Terbayar";
-      order.orderStatus = 'processing';
+      order.orderStatus = "processing";
       order.orderUpdateDate = new Date();
 
+      // Kurangi stok produk
       for (let item of order.cartItems) {
         const product = await Product.findById(item.productId);
         if (product) {
@@ -150,10 +181,12 @@ const capturePayment = async (req, res) => {
   }
 };
 
+// =========================
+// MIDTRANS CALLBACK
+// =========================
 const midtransCallback = async (req, res) => {
   try {
-    const rawBody = req.body.toString("utf8");
-    const { order_id, transaction_status } = JSON.parse(rawBody);
+    const { order_id, transaction_status } = req.body;
 
     console.log("Midtrans callback received:", { order_id, transaction_status });
 
@@ -176,19 +209,15 @@ const midtransCallback = async (req, res) => {
   }
 };
 
+// =========================
+// GET ALL ORDERS BY USER
+// =========================
 const getAllOrdersByUser = async (req, res) => {
   try {
     const { userId } = req.params;
     const objectId = new mongoose.Types.ObjectId(userId);
 
     const orders = await Order.find({ userId: objectId });
-
-    if (!orders.length) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-      });
-    }
 
     res.status(200).json({
       success: true,
@@ -203,6 +232,9 @@ const getAllOrdersByUser = async (req, res) => {
   }
 };
 
+// =========================
+// GET ORDER DETAILS
+// =========================
 const getOrderDetails = async (req, res) => {
   try {
     const { id } = req.params;
