@@ -1,5 +1,5 @@
-const Shipping = require("../models/Shipping");
-const Seller = require("../models/Seller");
+const Shipping = require("../../models/Shipping");
+const Seller = require("../../models/Seller");
 
 // Ambil semua ongkir milik seller
 const getSellerShipping = async (req, res) => {
