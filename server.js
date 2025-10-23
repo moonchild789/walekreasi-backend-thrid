@@ -11,6 +11,7 @@ const SellerOrderRouter = require("./routes/seller/order-routes");
 const SellerProfileRouter = require("./routes/seller/profile-routes");
 const SellerDashboardRoute = require("./routes/seller/dashboard-routes");
 const SellerPayoutRoute = require("./routes/seller/payout-routes");
+const SellerShippingRouter = require("./routes/seller/shipping-routes");
 
 const shopProductsRouter = require("./routes/shop/products-routes");
 const shopCartRouter = require("./routes/shop/cart-routes");
@@ -76,6 +77,7 @@ app.use("/api/store/orders", SellerOrderRouter);
 app.use("/api/store/profile", SellerProfileRouter);
 app.use("/api/store/dashboard", SellerDashboardRoute);
 app.use("/api/store/payout", SellerPayoutRoute);
+app.use("/api/store/shipping", SellerShippingRouter);
 app.use("/api/shop/products", shopProductsRouter);
 app.use("/api/shop/cart", shopCartRouter);
 app.use("/api/shop/address", shopAddressRouter);

@@ -2,60 +2,61 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../../models/User");
 const Seller = require("../../models/Seller");
-const { sendWelcomeNotificationToCustomer } = require("../common/notification-controller"); 
+const Shipping = require("../../models/Shipping");
+const { defaultRegions } = require("../../config/defaultRegions"); // ✅ import daftar daerah default
+const { sendWelcomeNotificationToCustomer } = require("../common/notification-controller");
 
 const JWT_SECRET = "PTA|HPL|wkPWA-2025";
 
 // === Helper ===
-const generateToken = (user) => jwt.sign({
-  id: user._id,
-  role: user.role,
-  email: user.email,
-  name: user.userName,
-  phoneNumber: user.phoneNumber,
-}, JWT_SECRET, { expiresIn: "60m" });
+const generateToken = (user) =>
+  jwt.sign(
+    {
+      id: user._id,
+      role: user.role,
+      email: user.email,
+      name: user.userName,
+      phoneNumber: user.phoneNumber,
+    },
+    JWT_SECRET,
+    { expiresIn: "60m" }
+  );
 
-setTokenCookie = (res, token) => {
+const setTokenCookie = (res, token) => {
   const isProduction = process.env.NODE_ENV === "production";
 
   res.cookie("token", token, {
-    httpOnly: true,                     
-    secure: isProduction,            
-    sameSite: isProduction ? "None" : "Lax",  
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "None" : "Lax",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 };
-
-
 
 // === Auth ===
 const registerUser = async (req, res) => {
   const { userName, email, password, phoneNumber, fcmToken } = req.body;
 
   try {
-    // Cek apakah email sudah terdaftar
     const exists = await User.findOne({ email });
     if (exists) {
       return res.status(400).json({
         success: false,
-        message: "Email sudah terdaftar!"
+        message: "Email sudah terdaftar!",
       });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Simpan user baru
     const newUser = await User.create({
       userName,
       email,
       password: hashedPassword,
       phoneNumber,
       fcmToken,
-      role: "customer" // default ke customer
+      role: "customer",
     });
 
-    // Kirim welcome notification (hanya untuk customer)
     if (newUser.role === "customer") {
       await sendWelcomeNotificationToCustomer(newUser._id);
     }
@@ -63,14 +64,13 @@ const registerUser = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Pendaftaran berhasil",
-      user: newUser
+      user: newUser,
     });
-
   } catch (e) {
     console.error("❌ registerUser error:", e);
     res.status(500).json({
       success: false,
-      message: "Terjadi kesalahan"
+      message: "Terjadi kesalahan",
     });
   }
 };
@@ -79,17 +79,47 @@ const registerSeller = async (req, res) => {
   const { sellerName, phoneNumber, email, password, ...otherInfo } = req.body;
 
   try {
+    // 🔹 Cek apakah email sudah digunakan
     const exists = await User.findOne({ email });
-    if (exists) return res.status(400).json({ success: false, message: "Email sudah digunakan!" });
+    if (exists)
+      return res
+        .status(400)
+        .json({ success: false, message: "Email sudah digunakan!" });
 
+    // 🔹 Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
-    const user = await User.create({ userName: sellerName, email, phoneNumber, password: hashedPassword, role: "seller" });
 
-    const seller = await Seller.create({ user: user._id, sellerName, phoneNumber, email, password, ...otherInfo });
+    // 🔹 Simpan user
+    const user = await User.create({
+      userName: sellerName,
+      email,
+      phoneNumber,
+      password: hashedPassword,
+      role: "seller",
+    });
+
+    // 🔹 Simpan seller
+    const seller = await Seller.create({
+      user: user._id,
+      sellerName,
+      phoneNumber,
+      email,
+      password,
+      ...otherInfo,
+    });
+
+    // 🔹 Seed ongkir default
+    const shippingData = defaultRegions.map((regionName) => ({
+      sellerId: seller._id,
+      regionName,
+      cost: 10000, // default ongkir
+    }));
+
+    await Shipping.insertMany(shippingData);
 
     res.status(201).json({
       success: true,
-      message: "Seller terdaftar",
+      message: "Seller terdaftar dengan ongkir default",
       user: {
         id: user._id,
         email: user.email,
@@ -99,7 +129,9 @@ const registerSeller = async (req, res) => {
     });
   } catch (e) {
     console.error("Register Seller Error:", e);
-    res.status(500).json({ success: false, message: "Terjadi kesalahan" });
+    res
+      .status(500)
+      .json({ success: false, message: "Terjadi kesalahan saat register seller" });
   }
 };
 
@@ -108,10 +140,16 @@ const loginUser = async (req, res) => {
 
   try {
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ success: false, message: "Pengguna tidak ditemukan" });
+    if (!user)
+      return res
+        .status(404)
+        .json({ success: false, message: "Pengguna tidak ditemukan" });
 
     const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ success: false, message: "Kata sandi salah" });
+    if (!match)
+      return res
+        .status(401)
+        .json({ success: false, message: "Kata sandi salah" });
 
     const token = generateToken(user);
     setTokenCookie(res, token);
@@ -134,34 +172,47 @@ const loginUser = async (req, res) => {
 };
 
 const logoutUser = (req, res) => {
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: true,
-    sameSite: "None",
-  }).json({ success: true, message: "Logout berhasil" });
+  res
+    .clearCookie("token", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
+    })
+    .json({ success: true, message: "Logout berhasil" });
 };
 
 // === Middleware ===
 const authMiddleware = (req, res, next) => {
   const token = req.cookies.token;
-  if (!token) return res.status(401).json({ success: false, message: "Token tidak ditemukan" });
+  if (!token)
+    return res
+      .status(401)
+      .json({ success: false, message: "Token tidak ditemukan" });
 
   try {
     req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch (e) {
-    return res.status(401).json({ success: false, message: "Token tidak valid" });
+    return res
+      .status(401)
+      .json({ success: false, message: "Token tidak valid" });
   }
 };
 
 const isAuthenticated = (req, res, next) => {
-  if (!req.user) return res.status(401).json({ success: false, message: "Harus login" });
+  if (!req.user)
+    return res
+      .status(401)
+      .json({ success: false, message: "Harus login terlebih dahulu" });
   next();
 };
 
 const isRole = (role) => (req, res, next) => {
   if (req.user?.role !== role) {
-    return res.status(403).json({ success: false, message: `Akses ditolak. Hanya ${role} yang diizinkan.` });
+    return res.status(403).json({
+      success: false,
+      message: `Akses ditolak. Hanya ${role} yang diizinkan.`,
+    });
   }
   next();
 };
