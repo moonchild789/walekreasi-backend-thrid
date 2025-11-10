@@ -18,14 +18,14 @@ const getSellerShipping = async (req, res) => {
 
 // Update ongkir per daerah
 const updateShippingCost = async (req, res) => {
-  const { regionName, cost } = req.body;
+  const { cityOrRegency, cost } = req.body;
   try {
     const seller = await Seller.findOne({ user: req.user.id });
     if (!seller)
       return res.status(404).json({ success: false, message: "Toko tidak ditemukan." });
 
     const shipping = await Shipping.findOneAndUpdate(
-      { sellerId: seller._id, regionName },
+      { sellerId: seller._id, cityOrRegency },
       { cost },
       { new: true }
     );

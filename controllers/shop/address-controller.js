@@ -2,9 +2,9 @@ const Address = require("../../models/Address");
 
 const addAddress = async (req, res) => {
   try {
-    const { userId, receiverName, address, city, pincode, phone, notes } = req.body;
+    const { userId, receiverName, address, cityOrRegency, pincode, phone, notes } = req.body;
 
-    if (!userId || !receiverName || !address || !city || !pincode || !phone || !notes) {
+    if (!userId || !receiverName || !address || !cityOrRegency || !pincode || !phone || !notes) {
       return res.status(400).json({
         success: false,
         message: "Data yang diberikan tidak valid!",
@@ -15,7 +15,7 @@ const addAddress = async (req, res) => {
       userId,
       receiverName,
       address,
-      city,
+      cityOrRegency,
       pincode,
       phone,
       notes,

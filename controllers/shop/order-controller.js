@@ -5,6 +5,7 @@ const Cart = require("../../models/Cart");
 const Product = require("../../models/Product");
 const User = require("../../models/User");
 const Seller = require("../../models/Seller");
+const Shipping = require("../../models/Shipping");
 const { sendOrderNotificationToSeller } = require("../common/notification-controller");
 
 // =========================
@@ -15,15 +16,19 @@ const createOrder = async (req, res) => {
     const { userId, cartId, cartItems, addressInfo } = req.body;
 
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ success: false, message: "User tidak ditemukan." });
+    if (!user)
+      return res.status(404).json({ success: false, message: "User tidak ditemukan." });
 
-    // Ambil data produk & seller
+    // =========================
+    // AMBIL PRODUK & SELLER
+    // =========================
     const updatedCartItems = await Promise.all(
       cartItems.map(async (item) => {
         const product = await Product.findById(item.productId);
         if (!product) throw new Error(`Produk tidak ditemukan: ${item.productId}`);
 
         const seller = await Seller.findById(product.sellerId);
+        const weight = Number(product.weight) || 0;
 
         return {
           productId: product._id.toString(),
@@ -34,45 +39,78 @@ const createOrder = async (req, res) => {
           image: product?.image || "",
           price: product?.salePrice > 0 ? product.salePrice : product.price,
           quantity: item.quantity,
-          shippingCost: item.shippingCost || 0,
+          weight,
+          totalWeight: weight * item.quantity, // total berat per item
         };
       })
     );
 
-    // Hitung total harga dan total ongkir
+    // =========================
+    // HITUNG TOTAL HARGA & BERAT
+    // =========================
     const totalAmount = updatedCartItems.reduce(
       (sum, item) => sum + item.price * item.quantity,
       0
     );
-    const shippingTotal = updatedCartItems.reduce(
-      (sum, item) => sum + (item.shippingCost || 0),
+
+    const totalWeightGram = updatedCartItems.reduce(
+      (sum, item) => sum + item.totalWeight,
       0
     );
+    const totalWeightKg = totalWeightGram / 1000; // konversi ke kg
+    const roundedWeight = Math.ceil(totalWeightKg + 0.00001); // pembulatan ke atas
+
+    // =========================
+    // AMBIL TARIF ONGKIR DARI COLLECTION SHIPPING
+    // =========================
+    const sellerId = updatedCartItems[0]?.sellerId;
+    const cityOrRegency = addressInfo.cityOrRegency;
+
+    const shippingDoc = await Shipping.findOne({
+      sellerId,
+      cityOrRegency: { $regex: new RegExp(`^${cityOrRegency}$`, "i") }, // case-insensitive
+    });
+
+    if (!shippingDoc) {
+      return res.status(400).json({
+        success: false,
+        message: `Ongkir ke wilayah ${cityOrRegency} belum tersedia untuk toko ini.`,
+      });
+    }
+
+    const shippingCostPerKg = shippingDoc.cost;
+    const shippingTotal = shippingCostPerKg * roundedWeight;
     const grandTotal = totalAmount + shippingTotal;
 
-    const sellerId = updatedCartItems[0]?.sellerId;
-
+    // =========================
+    // BENTUK ADDRESS INFO
+    // =========================
     const formattedAddressInfo = {
       addressId: addressInfo.addressId,
       receiverName: addressInfo.receiverName,
       address: addressInfo.address,
-      city: addressInfo.city,
+      cityOrRegency: addressInfo.cityOrRegency,
       pincode: addressInfo.pincode,
       phone: addressInfo.phone,
       notes: addressInfo.notes,
     };
 
+    // =========================
+    // SIMPAN ORDER KE DATABASE
+    // =========================
     const newOrder = new Order({
       userId,
       sellerId,
       cartId,
       cartItems: updatedCartItems,
       addressInfo: formattedAddressInfo,
-      orderStatus: "pending",
-      paymentStatus: "Belum Dibayar",
       totalAmount,
+      totalWeight: totalWeightGram,
+      shippingCostPerKg,
       shippingTotal,
       grandTotal,
+      orderStatus: "Menunggu Konfirmasi",
+      paymentStatus: "Belum Dibayar",
       orderDate: new Date(),
     });
 
@@ -85,13 +123,13 @@ const createOrder = async (req, res) => {
       console.error("❌ Gagal mengirim notifikasi ke seller:", notifyErr.message);
     }
 
-    // ========================
+    // =========================
     // MIDTRANS TRANSACTION
-    // ========================
+    // =========================
     const transaction = await snap.createTransaction({
       transaction_details: {
         order_id: newOrder._id.toString(),
-        gross_amount: grandTotal, // ✅ total produk + ongkir
+        gross_amount: grandTotal,
       },
       item_details: [
         ...updatedCartItems.map((item) => ({
@@ -100,7 +138,6 @@ const createOrder = async (req, res) => {
           quantity: item.quantity,
           name: `${item.title} | ${item.storeName}`.slice(0, 50),
         })),
-        // ✅ Tambahkan item ongkir sebagai item terpisah di Midtrans
         ...(shippingTotal > 0
           ? [
               {
@@ -125,9 +162,13 @@ const createOrder = async (req, res) => {
       snapToken: transaction.token,
       redirectUrl: transaction.redirect_url,
       orderId: newOrder._id,
+      totalWeight: roundedWeight,
+      shippingCostPerKg,
+      shippingTotal,
+      grandTotal,
     });
   } catch (err) {
-    console.error("Midtrans error:", err);
+    console.error("❌ Midtrans error:", err);
     res.status(500).json({
       success: false,
       message: err.message || "Gagal membuat pesanan. Silakan coba lagi nanti.",

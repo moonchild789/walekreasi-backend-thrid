@@ -9,7 +9,7 @@ const AddressSchema = new mongoose.Schema(
       maxlength: 50,
     }, 
     address: String,
-    city: String,
+    cityOrRegency: String,
     pincode: String,
     phone: String,
     notes: String,

@@ -7,13 +7,13 @@ const shippingSchema = new mongoose.Schema(
       ref: "Seller",
       required: true,
     },
-    regionName: {
+    cityOrRegency: {
       type: String,
       required: true,
     },
     cost: {
       type: Number,
-      default: 10000, // default ongkir jika seller belum ubah
+      default: 10000, 
     },
   },
   { timestamps: true }

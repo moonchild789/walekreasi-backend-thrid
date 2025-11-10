@@ -30,7 +30,7 @@ const addProduct = async (req, res) => {
     salePrice,
     totalStock,
     averageReview = 0,
-    shippingCost = 0, // 🆕 ongkir per produk (opsional)
+    weight, // ⚖️ berat produk dalam gram
   } = req.body;
 
   try {
@@ -39,6 +39,14 @@ const addProduct = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Toko tidak ditemukan." });
+    }
+
+    // Validasi berat
+    if (!weight || weight <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Berat produk harus lebih dari 0 gram.",
+      });
     }
 
     const product = new Product({
@@ -50,7 +58,7 @@ const addProduct = async (req, res) => {
       salePrice,
       totalStock,
       averageReview,
-      shippingCost, // 🆕 simpan ongkos kirim
+      weight,
       sellerId: seller._id,
     });
 
@@ -101,7 +109,7 @@ const editProduct = async (req, res) => {
     salePrice,
     totalStock,
     averageReview,
-    shippingCost, // 🆕 ikut disertakan untuk update
+    weight, // ⚖️ ikut diperbarui jika diubah
   } = req.body;
 
   try {
@@ -129,8 +137,9 @@ const editProduct = async (req, res) => {
       salePrice === "" ? 0 : salePrice ?? findProduct.salePrice;
     findProduct.totalStock = totalStock ?? findProduct.totalStock;
     findProduct.averageReview = averageReview ?? findProduct.averageReview;
-    findProduct.shippingCost =
-      shippingCost === "" ? 0 : shippingCost ?? findProduct.shippingCost; // 🆕
+    if (weight !== undefined && weight !== null) {
+      findProduct.weight = weight;
+    }
 
     await findProduct.save();
     res.status(200).json({ success: true, data: findProduct });

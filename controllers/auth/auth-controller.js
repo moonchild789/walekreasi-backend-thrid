@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../../models/User");
 const Seller = require("../../models/Seller");
 const Shipping = require("../../models/Shipping");
-const { defaultRegions } = require("../../config/defaultRegions"); // ✅ import daftar daerah default
+const { defaultRegions } = require("../../config/defaultRegions");
 const { sendWelcomeNotificationToCustomer } = require("../common/notification-controller");
 
 const JWT_SECRET = "PTA|HPL|wkPWA-2025";
@@ -109,9 +109,9 @@ const registerSeller = async (req, res) => {
     });
 
     // 🔹 Seed ongkir default
-    const shippingData = defaultRegions.map((regionName) => ({
+    const shippingData = defaultRegions.map((cityOrRegency) => ({
       sellerId: seller._id,
-      regionName,
+      cityOrRegency,
       cost: 10000, // default ongkir
     }));
 

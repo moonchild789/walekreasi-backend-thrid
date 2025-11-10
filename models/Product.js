@@ -16,13 +16,14 @@ const ProductSchema = new mongoose.Schema(
       ref: "Seller",
       required: true,
     },
-
-    // 🆕 Ongkos kirim (diatur oleh seller)
-    shippingCost: {
+    weight: {
       type: Number,
-      default: 0, // jika tidak diisi, anggap gratis
-      min: 0, // tidak boleh negatif
+      required: true,
+      default: 100,
+      min: 1,
+      max: 100000, 
     },
+
   },
   { timestamps: true }
 );
