@@ -1,7 +1,9 @@
 const Shipping = require("../../models/Shipping");
 const Seller = require("../../models/Seller");
 
-// Ambil semua ongkir milik seller
+// =======================
+// SELLER: Ambil semua ongkir milik seller (hanya bisa diakses oleh seller yang login)
+// =======================
 const getSellerShipping = async (req, res) => {
   try {
     const seller = await Seller.findOne({ user: req.user.id });
@@ -16,7 +18,9 @@ const getSellerShipping = async (req, res) => {
   }
 };
 
-// Update ongkir per daerah
+// =======================
+// SELLER: Update ongkir per daerah
+// =======================
 const updateShippingCost = async (req, res) => {
   const { cityOrRegency, cost } = req.body;
   try {
@@ -37,4 +41,29 @@ const updateShippingCost = async (req, res) => {
   }
 };
 
-module.exports = { getSellerShipping, updateShippingCost };
+// =======================
+// PUBLIC: Ambil ongkir milik seller (bisa diakses customer tanpa login)
+// =======================
+const getShippingBySellerPublic = async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+
+    const shipping = await Shipping.find({ sellerId });
+    if (!shipping.length) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Data ongkir tidak ditemukan." });
+    }
+
+    res.status(200).json({ success: true, data: shipping });
+  } catch (error) {
+    console.error("getShippingBySellerPublic error:", error);
+    res.status(500).json({ success: false, message: "Gagal mengambil data ongkir publik." });
+  }
+};
+
+module.exports = { 
+  getSellerShipping, 
+  updateShippingCost, 
+  getShippingBySellerPublic 
+};
