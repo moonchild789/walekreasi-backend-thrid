@@ -46,6 +46,7 @@ const registerUser = async (req, res) => {
       });
     }
 
+    // Hash manual tetap digunakan untuk User
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const newUser = await User.create({
@@ -70,7 +71,7 @@ const registerUser = async (req, res) => {
     console.error("❌ registerUser error:", e);
     res.status(500).json({
       success: false,
-      message: "Terjadi kesalahan",
+      message: "Pastikan Semua Data Terisi Dengan Benar",
     });
   }
 };
@@ -79,47 +80,42 @@ const registerSeller = async (req, res) => {
   const { sellerName, phoneNumber, email, password, ...otherInfo } = req.body;
 
   try {
-    // 🔹 Cek apakah email sudah digunakan
     const exists = await User.findOne({ email });
     if (exists)
       return res
         .status(400)
         .json({ success: false, message: "Email sudah digunakan!" });
 
-    // 🔹 Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
-
-    // 🔹 Simpan user
+    // ❗ Tidak hashing manual. Schema Seller yang akan hash otomatis.
     const user = await User.create({
       userName: sellerName,
       email,
       phoneNumber,
-      password: hashedPassword,
+      password, // asli, akan di-hash oleh User schema
       role: "seller",
     });
 
-    // 🔹 Simpan seller
     const seller = await Seller.create({
       user: user._id,
       sellerName,
       phoneNumber,
       email,
-      password,
+      password, // asli, di-hash oleh Seller schema
       ...otherInfo,
     });
 
-    // 🔹 Seed ongkir default
+    // Buat ongkir default
     const shippingData = defaultRegions.map((cityOrRegency) => ({
       sellerId: seller._id,
       cityOrRegency,
-      cost: 10000, // default ongkir
+      cost: 10000,
     }));
 
     await Shipping.insertMany(shippingData);
 
     res.status(201).json({
       success: true,
-      message: "Seller terdaftar dengan ongkir default",
+      message: "Pendaftaran Berhasil",
       user: {
         id: user._id,
         email: user.email,
@@ -129,9 +125,10 @@ const registerSeller = async (req, res) => {
     });
   } catch (e) {
     console.error("Register Seller Error:", e);
-    res
-      .status(500)
-      .json({ success: false, message: "Terjadi kesalahan saat register seller" });
+    res.status(500).json({
+      success: false,
+      message: "Pastikan Semua Data Terisi Dengan Benar",
+    });
   }
 };
 
@@ -139,17 +136,24 @@ const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const user = await User.findOne({ email });
-    if (!user)
-      return res
-        .status(404)
-        .json({ success: false, message: "Pengguna tidak ditemukan" });
+    // ❗ Password di schema punya select:false
+    const user = await User.findOne({ email }).select("+password");
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Email atau password salah",
+      });
+    }
 
     const match = await bcrypt.compare(password, user.password);
-    if (!match)
-      return res
-        .status(401)
-        .json({ success: false, message: "Kata sandi salah" });
+
+    if (!match) {
+      return res.status(401).json({
+        success: false,
+        message: "Email atau password salah",
+      });
+    }
 
     const token = generateToken(user);
     setTokenCookie(res, token);
@@ -166,7 +170,7 @@ const loginUser = async (req, res) => {
       },
     });
   } catch (e) {
-    console.error(e);
+    console.error("Login Error:", e);
     res.status(500).json({ success: false, message: "Terjadi kesalahan" });
   }
 };
