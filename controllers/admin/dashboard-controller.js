@@ -6,6 +6,9 @@ const monthNames = [
   "Jul", "Agu", "Sep", "Okt", "Nov", "Des"
 ];
 
+/* ======================================================
+   GET ADMIN DASHBOARD STATISTICS
+====================================================== */
 const getAdminDashboardStats = async (req, res) => {
   try {
     // 1. Hitung total seller & customer
@@ -34,7 +37,7 @@ const getAdminDashboardStats = async (req, res) => {
       { $sort: { "_id.month": 1 } },
     ]);
 
-    // 4. Format ke dalam 12 bulan, isi 0 jika tidak ada data
+    // 4. Format ke dalam 12 bulan
     const monthlyRevenue = Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
       const found = monthlyStatsRaw.find((item) => item._id.month === month);
@@ -57,7 +60,7 @@ const getAdminDashboardStats = async (req, res) => {
         customerCount,
         totalRevenue,
         totalOrders,
-        monthlyRevenue, // <- FOR CHART
+        monthlyRevenue,
       },
     });
 
@@ -70,4 +73,48 @@ const getAdminDashboardStats = async (req, res) => {
   }
 };
 
-module.exports = { getAdminDashboardStats };
+
+/* ======================================================
+   GET ORDERS GROUPED BY STATUS
+====================================================== */
+const getAdminOrdersGroupedByStatus = async (req, res) => {
+  try {
+    const orders = await Order.find()
+      .populate("userId", "userName phoneNumber")
+      .sort({ createdAt: -1 });
+
+    // Kelompok status
+    const grouped = {
+      pending: [],
+      processing: [],
+      shipped: [],
+      delivered: [],
+      rejected: [],
+    };
+
+    orders.forEach((order) => {
+      const status = order.orderStatus || "pending";
+      if (grouped[status]) {
+        grouped[status].push(order);
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: grouped,
+    });
+
+  } catch (error) {
+    console.error("Admin Order Group Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Gagal mengambil data pesanan admin",
+    });
+  }
+};
+
+
+module.exports = {
+  getAdminDashboardStats,
+  getAdminOrdersGroupedByStatus,
+};
