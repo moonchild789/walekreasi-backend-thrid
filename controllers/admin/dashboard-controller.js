@@ -1,48 +1,55 @@
 const User = require("../../models/User");
 const Order = require("../../models/Order");
 
+const monthNames = [
+  "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+  "Jul", "Agu", "Sep", "Okt", "Nov", "Des"
+];
+
 const getAdminDashboardStats = async (req, res) => {
   try {
-    // 1. Ambil jumlah seller dan customer
+    // 1. Hitung total seller & customer
     const sellerCount = await User.countDocuments({ role: "seller" });
     const customerCount = await User.countDocuments({ role: "customer" });
 
-    // 2. Tentukan rentang waktu untuk data mingguan (7 hari terakhir)
-    const now = new Date();
-    const sevenDaysAgo = new Date(now.setDate(now.getDate() - 7)); // Cara yang lebih ringkas
+    // 2. Range data: awal tahun sampai sekarang
+    const today = new Date();
+    const startOfYear = new Date(today.getFullYear(), 0, 1);
 
-    // 3. Gunakan aggregation pipeline untuk mendapatkan data yang relevan
-    const weeklyStats = await Order.aggregate([
+    // 3. Aggregasi data order per bulan
+    const monthlyStatsRaw = await Order.aggregate([
       {
         $match: {
-          createdAt: { $gte: sevenDaysAgo },
-          status: { $in: ["terbayar","pending","prosessing","shipped","delivered"] },
+          createdAt: { $gte: startOfYear, $lte: today },
+          paymentStatus: { $in: ["Terbayar", "settlement", "capture"] },
         },
       },
       {
         $group: {
-          _id: { $dayOfWeek: "$createdAt" }, // Mengelompokkan berdasarkan hari (1=Minggu, 7=Sabtu)
+          _id: { month: { $month: "$createdAt" } },
           totalRevenue: { $sum: "$totalAmount" },
           totalOrders: { $sum: 1 },
         },
       },
-      {
-        $sort: { _id: 1 }
-      }
+      { $sort: { "_id.month": 1 } },
     ]);
-    
-    // 4. Hitung total revenue dan total orders dari hasil aggregation
-    const totalRevenue = weeklyStats.reduce((sum, stat) => sum + stat.totalRevenue, 0);
-    const totalOrders = weeklyStats.reduce((sum, stat) => sum + stat.totalOrders, 0);
 
-    // 5. Ubah format data harian agar sesuai dengan chart
-    const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-    const weeklyRevenue = weeklyStats.map(stat => ({
-      day: dayNames[stat._id - 1], 
-      revenue: stat.totalRevenue,
-    }));
-    
-    // 6. Kirim semua data ke front-end
+    // 4. Format ke dalam 12 bulan, isi 0 jika tidak ada data
+    const monthlyRevenue = Array.from({ length: 12 }, (_, i) => {
+      const month = i + 1;
+      const found = monthlyStatsRaw.find((item) => item._id.month === month);
+      return {
+        month: monthNames[i],
+        revenue: found ? found.totalRevenue : 0,
+        orders: found ? found.totalOrders : 0,
+      };
+    });
+
+    // 5. Hitung total keseluruhan
+    const totalRevenue = monthlyRevenue.reduce((sum, m) => sum + m.revenue, 0);
+    const totalOrders = monthlyRevenue.reduce((sum, m) => sum + m.orders, 0);
+
+    // 6. Kirim ke frontend
     res.status(200).json({
       success: true,
       data: {
@@ -50,14 +57,15 @@ const getAdminDashboardStats = async (req, res) => {
         customerCount,
         totalRevenue,
         totalOrders,
-        weeklyRevenue,
+        monthlyRevenue, // <- FOR CHART
       },
     });
+
   } catch (error) {
     console.error("Dashboard Error:", error);
     res.status(500).json({
       success: false,
-      message: "Gagal mengambil data dashboard",
+      message: "Gagal mengambil data dashboard admin",
     });
   }
 };
