@@ -4,7 +4,7 @@ const SellerSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
-    required: true,
+    required: false,
   },
 
   // Data Pribadi
@@ -14,11 +14,12 @@ const SellerSchema = new mongoose.Schema({
   },
   phoneNumber: {
     type: String,
+    required: true
   },
   email: {
     type: String,
-    required: true,
   },
+
   password: {
     type: String,
     required: true,
@@ -36,6 +37,7 @@ const SellerSchema = new mongoose.Schema({
   province: {
     type: String,
     default: "Sulawesi Utara",
+    required: true, 
   },
 
   // Data Usaha
