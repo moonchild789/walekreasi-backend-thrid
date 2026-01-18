@@ -8,13 +8,13 @@ const { sendWelcomeNotificationToCustomer } = require("../common/notification-co
 
 const JWT_SECRET = "PTA|HPL|wkPWA-2025";
 
-// === Helper ===
+// ================= HELPER =================
 const generateToken = (user) =>
   jwt.sign(
     {
       id: user._id,
       role: user.role,
-      email: user.email,
+      email: user.email || null,
       name: user.userName,
       phoneNumber: user.phoneNumber,
     },
@@ -33,93 +33,137 @@ const setTokenCookie = (res, token) => {
   });
 };
 
-// === Auth ===
+// ================= REGISTER CUSTOMER =================
 const registerUser = async (req, res) => {
   const { userName, email, password, phoneNumber, fcmToken } = req.body;
 
   try {
-    const exists = await User.findOne({ email });
-    if (exists) {
+    if (!phoneNumber || !password || !userName) {
       return res.status(400).json({
         success: false,
-        message: "Email sudah terdaftar!",
+        message: "Nama, nomor telepon, dan password wajib diisi",
       });
     }
 
-    // Hash manual tetap digunakan untuk User
+    // Cek nomor telepon (WAJIB & UNIK)
+    const phoneExists = await User.findOne({ phoneNumber });
+    if (phoneExists) {
+      return res.status(400).json({
+        success: false,
+        message: "Nomor telepon sudah terdaftar",
+      });
+    }
+
+    // Cek email hanya jika diisi
+    if (email) {
+      const emailExists = await User.findOne({ email });
+      if (emailExists) {
+        return res.status(400).json({
+          success: false,
+          message: "Email sudah terdaftar",
+        });
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const newUser = await User.create({
       userName,
-      email,
+      email: email || null,
       password: hashedPassword,
       phoneNumber,
       fcmToken,
       role: "customer",
     });
 
-    if (newUser.role === "customer") {
-      await sendWelcomeNotificationToCustomer(newUser._id);
-    }
+    await sendWelcomeNotificationToCustomer(newUser._id);
 
     res.status(201).json({
       success: true,
       message: "Pendaftaran berhasil",
-      user: newUser,
+      user: {
+        id: newUser._id,
+        name: newUser.userName,
+        phoneNumber: newUser.phoneNumber,
+        email: newUser.email,
+      },
     });
   } catch (e) {
     console.error("❌ registerUser error:", e);
     res.status(500).json({
       success: false,
-      message: "Pastikan Semua Data Terisi Dengan Benar",
+      message: "Terjadi kesalahan saat pendaftaran",
     });
   }
 };
 
+// ================= REGISTER SELLER =================
 const registerSeller = async (req, res) => {
   const { sellerName, phoneNumber, email, password, ...otherInfo } = req.body;
 
   try {
-    const exists = await User.findOne({ email });
-    if (exists)
-      return res
-        .status(400)
-        .json({ success: false, message: "Email sudah digunakan!" });
+    if (!sellerName || !phoneNumber || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Nama seller, nomor telepon, dan password wajib diisi",
+      });
+    }
 
-    // ❗ Tidak hashing manual. Schema Seller yang akan hash otomatis.
+    // Cek phoneNumber (WAJIB & UNIK)
+    const phoneExists = await User.findOne({ phoneNumber });
+    if (phoneExists) {
+      return res.status(400).json({
+        success: false,
+        message: "Nomor telepon sudah digunakan",
+      });
+    }
+
+    // Cek email hanya jika diisi
+    if (email) {
+      const emailExists = await User.findOne({ email });
+      if (emailExists) {
+        return res.status(400).json({
+          success: false,
+          message: "Email sudah digunakan",
+        });
+      }
+    }
+
+    // User (hash oleh schema User)
     const user = await User.create({
       userName: sellerName,
-      email,
+      email: email || null,
       phoneNumber,
-      password, // asli, akan di-hash oleh User schema
+      password,
       role: "seller",
     });
 
+    // Seller (hash oleh schema Seller)
     const seller = await Seller.create({
       user: user._id,
       sellerName,
       phoneNumber,
-      email,
-      password, // asli, di-hash oleh Seller schema
+      email: email || null,
+      password,
       ...otherInfo,
     });
 
-    // Buat ongkir default
+    // Ongkir default
     const shippingData = defaultRegions.map((cityOrRegency) => ({
       sellerId: seller._id,
       cityOrRegency,
       cost: 10000,
     }));
-
     await Shipping.insertMany(shippingData);
 
     res.status(201).json({
       success: true,
-      message: "Pendaftaran Berhasil",
+      message: "Pendaftaran seller berhasil",
       user: {
         id: user._id,
-        email: user.email,
         role: user.role,
+        phoneNumber: user.phoneNumber,
+        email: user.email,
         sellerId: seller._id,
       },
     });
@@ -127,31 +171,40 @@ const registerSeller = async (req, res) => {
     console.error("Register Seller Error:", e);
     res.status(500).json({
       success: false,
-      message: "Pastikan Semua Data Terisi Dengan Benar",
+      message: "Terjadi kesalahan saat pendaftaran seller",
     });
   }
 };
 
+// ================= LOGIN (EMAIL / PHONE) =================
 const loginUser = async (req, res) => {
-  const { email, password } = req.body;
+  const { identifier, password } = req.body;
+  // identifier = email ATAU phoneNumber
 
   try {
-    // ❗ Password di schema punya select:false
-    const user = await User.findOne({ email }).select("+password");
+    if (!identifier || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email / nomor telepon dan password wajib diisi",
+      });
+    }
+
+    const user = await User.findOne({
+      $or: [{ email: identifier }, { phoneNumber: identifier }],
+    }).select("+password");
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Email atau password salah",
+        message: "Akun tidak ditemukan",
       });
     }
 
     const match = await bcrypt.compare(password, user.password);
-
     if (!match) {
       return res.status(401).json({
         success: false,
-        message: "Email atau password salah",
+        message: "Password salah",
       });
     }
 
@@ -164,17 +217,21 @@ const loginUser = async (req, res) => {
       user: {
         id: user._id,
         name: user.userName,
-        email: user.email,
         role: user.role,
         phoneNumber: user.phoneNumber,
+        email: user.email,
       },
     });
   } catch (e) {
     console.error("Login Error:", e);
-    res.status(500).json({ success: false, message: "Terjadi kesalahan" });
+    res.status(500).json({
+      success: false,
+      message: "Terjadi kesalahan saat login",
+    });
   }
 };
 
+// ================= LOGOUT =================
 const logoutUser = (req, res) => {
   res
     .clearCookie("token", {
@@ -185,7 +242,7 @@ const logoutUser = (req, res) => {
     .json({ success: true, message: "Logout berhasil" });
 };
 
-// === Middleware ===
+// ================= MIDDLEWARE =================
 const authMiddleware = (req, res, next) => {
   const token = req.cookies.token;
   if (!token)
@@ -196,7 +253,7 @@ const authMiddleware = (req, res, next) => {
   try {
     req.user = jwt.verify(token, JWT_SECRET);
     next();
-  } catch (e) {
+  } catch {
     return res
       .status(401)
       .json({ success: false, message: "Token tidak valid" });
