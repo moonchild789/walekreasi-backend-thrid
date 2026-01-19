@@ -4,7 +4,7 @@ const SellerSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
-    required: false,
+    required: true
   },
 
   // Data Pribadi
@@ -18,11 +18,6 @@ const SellerSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-  },
-
-  password: {
-    type: String,
-    required: true,
   },
 
   // Domisili
