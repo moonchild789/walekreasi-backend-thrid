@@ -6,7 +6,7 @@ const Shipping = require("../../models/Shipping");
 const { defaultRegions } = require("../../config/defaultRegions");
 const { sendWelcomeNotificationToCustomer } = require("../common/notification-controller");
 
-const JWT_SECRET = "PTA|HPL|wkPWA-2025";
+const JWT_SECRET = process.env.JWT_SECRET || "PTA|HPL|wkPWA-2025";
 
 // ================= HELPER =================
 const generateToken = (user) =>
@@ -38,14 +38,13 @@ const registerUser = async (req, res) => {
   const { userName, email, password, phoneNumber, fcmToken } = req.body;
 
   try {
-    if (!phoneNumber || !password || !userName) {
+    if (!userName || !phoneNumber || !password) {
       return res.status(400).json({
         success: false,
         message: "Nama, nomor telepon, dan password wajib diisi",
       });
     }
 
-    // Cek nomor telepon (WAJIB & UNIK)
     const phoneExists = await User.findOne({ phoneNumber });
     if (phoneExists) {
       return res.status(400).json({
@@ -54,7 +53,6 @@ const registerUser = async (req, res) => {
       });
     }
 
-    // Cek email hanya jika diisi
     if (email) {
       const emailExists = await User.findOne({ email });
       if (emailExists) {
@@ -65,6 +63,7 @@ const registerUser = async (req, res) => {
       }
     }
 
+    // 🔐 HASH PASSWORD
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const newUser = await User.create({
@@ -109,7 +108,6 @@ const registerSeller = async (req, res) => {
       });
     }
 
-    // Cek phoneNumber (WAJIB & UNIK)
     const phoneExists = await User.findOne({ phoneNumber });
     if (phoneExists) {
       return res.status(400).json({
@@ -118,7 +116,6 @@ const registerSeller = async (req, res) => {
       });
     }
 
-    // Cek email hanya jika diisi
     if (email) {
       const emailExists = await User.findOne({ email });
       if (emailExists) {
@@ -129,22 +126,24 @@ const registerSeller = async (req, res) => {
       }
     }
 
-    // User (hash oleh schema User)
+    // 🔐 HASH PASSWORD
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // 1️⃣ USER (AUTH)
     const user = await User.create({
       userName: sellerName,
       email: email || null,
       phoneNumber,
-      password,
+      password: hashedPassword,
       role: "seller",
     });
 
-    // Seller (hash oleh schema Seller)
+    // 2️⃣ SELLER (PROFILE — TANPA PASSWORD)
     const seller = await Seller.create({
       user: user._id,
       sellerName,
       phoneNumber,
       email: email || null,
-      password,
       ...otherInfo,
     });
 
@@ -168,7 +167,7 @@ const registerSeller = async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("Register Seller Error:", e);
+    console.error("❌ registerSeller error:", e);
     res.status(500).json({
       success: false,
       message: "Terjadi kesalahan saat pendaftaran seller",
@@ -179,7 +178,6 @@ const registerSeller = async (req, res) => {
 // ================= LOGIN (EMAIL / PHONE) =================
 const loginUser = async (req, res) => {
   const { identifier, password } = req.body;
-  // identifier = email ATAU phoneNumber
 
   try {
     if (!identifier || !password) {
@@ -191,7 +189,7 @@ const loginUser = async (req, res) => {
 
     const user = await User.findOne({
       $or: [{ email: identifier }, { phoneNumber: identifier }],
-    }).select("+password");
+    }).select("+password"); // 🔐 hanya di login
 
     if (!user) {
       return res.status(401).json({
@@ -200,8 +198,8 @@ const loginUser = async (req, res) => {
       });
     }
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
       return res.status(401).json({
         success: false,
         message: "Password salah",
@@ -223,7 +221,7 @@ const loginUser = async (req, res) => {
       },
     });
   } catch (e) {
-    console.error("Login Error:", e);
+    console.error("❌ loginUser error:", e);
     res.status(500).json({
       success: false,
       message: "Terjadi kesalahan saat login",
