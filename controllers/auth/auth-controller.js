@@ -99,15 +99,7 @@ const registerUser = async (req, res) => {
 // ================= REGISTER SELLER =================
 const registerSeller = async (req, res) => {
   const { sellerName, phoneNumber, email, password, ...otherInfo } = req.body;
-
   try {
-    if (!sellerName || !phoneNumber || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Nama seller, nomor telepon, dan password wajib diisi",
-      });
-    }
-
     const phoneExists = await User.findOne({ phoneNumber });
     if (phoneExists) {
       return res.status(400).json({
@@ -180,21 +172,14 @@ const loginUser = async (req, res) => {
   const { identifier, password } = req.body;
 
   try {
-    if (!identifier || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Email / nomor telepon dan password wajib diisi",
-      });
-    }
-
     const user = await User.findOne({
       $or: [{ email: identifier }, { phoneNumber: identifier }],
-    }).select("+password"); // 🔐 hanya di login
+    }).select("+password");
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Email atau Nomor Telepon salah",
+        message: "Email atau Nomor telepon salah",
       });
     }
 
@@ -209,25 +194,25 @@ const loginUser = async (req, res) => {
     const token = generateToken(user);
     setTokenCookie(res, token);
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Login berhasil",
       user: {
         id: user._id,
-        name: user.userName,
         role: user.role,
         phoneNumber: user.phoneNumber,
         email: user.email,
       },
     });
-  } catch (e) {
-    console.error("❌ loginUser error:", e);
-    res.status(500).json({
+  } catch (error) {
+    console.error("loginUser error:", error);
+    return res.status(500).json({
       success: false,
       message: "Terjadi kesalahan saat login",
     });
   }
 };
+
 
 // ================= LOGOUT =================
 const logoutUser = (req, res) => {
