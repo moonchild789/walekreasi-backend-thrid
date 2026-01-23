@@ -59,9 +59,6 @@ app.use(cors({
 // ✅ Middleware global
 app.use(cookieParser());
 
-// ✅ Midtrans Webhook: Raw body hanya di path tertentu
-app.use("/api/shop/order/midtrans-callback", express.raw({ type: "*/*" }));
-
 // ✅ Semua route lain pakai JSON body
 app.use(express.json());
 
